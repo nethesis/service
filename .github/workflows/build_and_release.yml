@@ -1,0 +1,93 @@
+---
+name: Build and release
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    strategy:
+      matrix:
+        artifact: [ "service" ]
+    name: Build ${{ matrix.artifact }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup go
+        uses: actions/setup-go@v1
+        with:
+          go-version: '1.14'
+      - name: Build binary
+        run: go build
+      - name: Prepare artifact
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          mkdir ${{ runner.temp }}/artifacts
+          cp ${{ matrix.artifact }} ${{ runner.temp }}/artifacts
+      - name: Updload artifact
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v1
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ runner.temp }}/artifacts
+
+  draft-release:
+    runs-on: ubuntu-18.04
+    needs: build
+    name: Create draft release
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      id: ${{ steps.create_release.outputs.id }}
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@master
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: true
+
+  upload-artifacts:
+    name: Upload artifacts
+    runs-on: ubuntu-18.04
+    needs: draft-release
+    strategy:
+      matrix:
+        artifact: [ "service" ]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@master
+      - run: mkdir ${{ runner.temp }}/artifacts
+      - uses: actions/download-artifact@v1
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ runner.temp }}/artifacts
+      - name: Upload Release Asset
+        id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.draft-release.outputs.upload_url }}
+          asset_path: ${{ runner.temp }}/artifacts/${{ matrix.artifact }}
+          asset_name: ${{ matrix.artifact }}
+          asset_content_type: application/octet-stream
+
+  release:
+    runs-on: ubuntu-18.04
+    needs: [upload-artifacts, draft-release]
+    name: Create release
+    steps:
+      - uses: actions/github-script@0.9.0
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            github.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.draft-release.outputs.id }},
+              draft: false
+            })
