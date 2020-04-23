@@ -14,3 +14,5 @@ Returned JSON object:
 ```json
 {"message":"world"}
 ```
+
+v2
