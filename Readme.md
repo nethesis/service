@@ -4,7 +4,7 @@ Simple hello service
 
 ## APIs
 
-### GET /hellp
+### GET /hello
 ---
 
 #### Response
