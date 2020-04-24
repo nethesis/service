@@ -6,5 +6,5 @@ import (
 )
 
 func HelloWorld(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "test"})
+	c.JSON(http.StatusOK, gin.H{"message": "ciao"})
 }
